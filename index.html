@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tetris Game – with Sound</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        *{box-sizing:border-box}
+        body{
+            margin:0;
+            font-family:'Orbitron',monospace;
+            background:linear-gradient(135deg,#0f0f23 0%,#1a1a2e 50%,#16213e 100%);
+            color:#fff;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            min-height:100vh;
+            overflow:hidden;
+        }
+        body::before{
+            content:'';
+            position:fixed;
+            inset:0;
+            background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.03) 2px,rgba(255,255,255,.03) 4px);
+            pointer-events:none;
+            z-index:1;
+        }
+        .game-container{
+            display:flex;
+            gap:30px;
+            z-index:2;
+            position:relative;
+        }
+        .game-board{
+            border:3px solid #00ffff;
+            border-radius:8px;
+            background:linear-gradient(180deg,#001122 0%,#000811 100%);
+            box-shadow:0 0 20px rgba(0,255,255,.3),inset 0 0 20px rgba(0,255,255,.1);
+            position:relative;
+            overflow:hidden;
+        }
+        .game-board::before{
+            content:'';
+            position:absolute;
+            inset:-2px;
+            background:linear-gradient(45deg,#00ffff,#0080ff,#8000ff,#ff0080,#00ffff);
+            border-radius:8px;
+            z-index:-1;
+            animation:borderGlow 3s linear infinite;
+            background-size:400% 400%;
+        }
+        @keyframes borderGlow{
+            0%{background-position:0% 50%}
+            50%{background-position:100% 50%}
+            100%{background-position:0% 50%}
+        }
+        .info-panel{
+            width:220px;
+            padding:20px;
+            background:rgba(0,20,40,.8);
+            border:2px solid rgba(0,255,255,.3);
+            border-radius:12px;
+            backdrop-filter:blur(10px);
+            box-shadow:0 8px 32px rgba(0,0,0,.3);
+        }
+        .info-panel h3{
+            color:#00ffff;
+            font-weight:900;
+            margin:0 0 10px 0;
+            text-transform:uppercase;
+            letter-spacing:2px;
+            font-size:14px;
+            text-shadow:0 0 10px rgba(0,255,255,.5);
+        }
+        .info-panel p{margin:5px 0;font-size:18px}
+        .score-value,.level-value,.lines-value{color:#00ff88;font-size:24px}
+        .controls{margin-top:20px;font-size:11px;color:#aaa}
+        .controls h4{color:#00ffff;margin:0 0 5px 0;font-size:13px}
+        .controls div{display:flex;justify-content:space-between;margin:3px 0}
+        .game-over{
+            position:absolute;
+            top:50%;left:50%;
+            transform:translate(-50%,-50%);
+            background:linear-gradient(135deg,rgba(0,0,0,.9),rgba(20,0,40,.9));
+            padding:40px;border:2px solid #ff0080;border-radius:16px;
+            text-align:center;display:none;z-index:10;
+            box-shadow:0 0 30px rgba(255,0,128,.5),inset 0 0 30px rgba(255,0,128,.1);
+            animation:gameOverPulse 2s ease-in-out infinite;
+        }
+        @keyframes gameOverPulse{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.05)}}
+        button{padding:12px 30px;margin-top:15px;background:linear-gradient(45deg,#00ffff,#0080ff);border:none;border-radius:25px;color:#fff;font-family:'Orbitron',monospace;font-weight:700;cursor:pointer;transition:all .3s;box-shadow:0 4px 15px rgba(0,255,255,.3)}
+        button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,255,255,.5)}
+        .pause-overlay{position:absolute;inset:0;background:rgba(0,0,0,.7);display:none;justify-content:center;align-items:center;font-size:36px;color:#00ffff;text-shadow:0 0 20px rgba(0,255,255,.8);z-index:5;animation:pausePulse 1.5s ease-in-out infinite}
+        @keyframes pausePulse{0%,100%{opacity:.8}50%{opacity:1}}
+        .stats-section{margin:15px 0;padding:10px;background:rgba(0,255,255,.1);border-radius:8px;border:1px solid rgba(0,255,255,.2)}
+        .speed-indicator{width:100%;height:6px;background:rgba(0,255,255,.2);border-radius:3px;margin-top:5px;overflow:hidden}
+        .speed-fill{height:100%;background:linear-gradient(90deg,#00ff88,#00ffff);border-radius:3px;transition:width .3s;box-shadow:0 0 10px rgba(0,255,255,.5)}
+        #mute-btn{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.5);border:1px solid #00ffff;color:#00ffff;padding:5px 10px;border-radius:15px;font-size:12px;cursor:pointer}
+    </style>
+</head>
+<body>
+<audio id="radio" preload="none" crossorigin="anonymous"></audio>
+<button id="radio-btn" title="Kohina stream">📻 Play Radio</button>
+<span id="radio-status" style="position:absolute;top:35px;left:60px;font-size:11px;color:#0ff;"></span>
+    <button id="mute-btn">🔊</button>
+    <div class="game-container">
+        <canvas id="game-board" width="300" height="600"></canvas>
+        <div class="info-panel">
+            <h3>Next</h3>
+            <canvas id="next-piece" width="120" height="120"></canvas>
+            <div class="stats-section"><h3>Score</h3><span id="score" class="score-value">0</span></div>
+            <div class="stats-section"><h3>Level</h3><span id="level" class="level-value">1</span><div class="speed-indicator"><div id="speed-fill" class="speed-fill" style="width:10%"></div></div></div>
+            <div class="stats-section"><h3>Lines</h3><span id="lines" class="lines-value">0</span></div>
+            <div class="controls">
+                <h4>Controls</h4>
+                <div><span>Move:</span><span>← →</span></div>
+                <div><span>Soft Drop:</span><span>↓</span></div>
+                <div><span>Hard Drop:</span><span>Space</span></div>
+                <div><span>Rotate:</span><span>↑</span></div>
+                <div><span>Pause:</span><span>P</span></div>
+            </div>
+        </div>
+        <div class="game-over" id="game-over">
+            <h2>Game Over</h2>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <p>Lines Cleared: <span id="final-lines">0</span></p>
+            <button id="restart-button">Play Again</button>
+        </div>
+        <div class="pause-overlay" id="pause-overlay">PAUSED</div>
+    </div>
+
+    <script>
+
+        /* ----------  Game Core  ---------- */
+        const BOARD_WIDTH = 10, BOARD_HEIGHT = 20, CELL_SIZE = 30;
+        const PIECES = [
+            [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+            [[1,0,0],[1,1,1],[0,0,0]],
+            [[0,0,1],[1,1,1],[0,0,0]],
+            [[1,1],[1,1]],
+            [[0,1,1],[1,1,0],[0,0,0]],
+            [[0,1,0],[1,1,1],[0,0,0]],
+            [[1,1,0],[0,1,1],[0,0,0]]
+        ];
+        const COLORS = ['#00f5ff','#0066ff','#ff9500','#ffea00','#00ff00','#bb00ff','#ff0040'];
+
+        let board, score, level, lines, dropInterval, lastDropTime, paused, gameOver, currentPiece, nextPiece;
+
+        const $ = id => document.getElementById(id);
+        const ctx = $('game-board').getContext('2d');
+        const nextCtx = $('next-piece').getContext('2d');
+
+        function init() {
+            resetGame();
+            generateNextPiece();
+            generatePiece();
+            requestAnimationFrame(gameLoop);
+        }
+        function resetGame() {
+            board = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+            score = 0; level = 1; lines = 0; paused = false; gameOver = false;
+            $('game-over').style.display = 'none';
+            $('pause-overlay').style.display = 'none';
+            setDropInterval();
+            updateScore();
+        }
+        function setDropInterval() { dropInterval = Math.max(100, 1000 - (level - 1) * 100); }
+
+        function generateNextPiece() {
+            const idx = Math.floor(Math.random() * PIECES.length);
+            nextPiece = { shape: PIECES[idx], color: COLORS[idx], x: 0, y: 0 };
+            nextPiece.x = Math.floor((BOARD_WIDTH - nextPiece.shape[0].length) / 2);
+            drawNextPiece();
+        }
+        function generatePiece() {
+            if (!nextPiece) generateNextPiece();
+            currentPiece = nextPiece;
+            generateNextPiece();
+            if (!isValidMove(0, 0)) { gameOver = true; Sounds.gameover(); showGameOver(); }
+        }
+        function drawNextPiece() {
+            nextCtx.clearRect(0, 0, 120, 120);
+            const bs = 25, ox = (120 - nextPiece.shape[0].length * bs) / 2, oy = (120 - nextPiece.shape.length * bs) / 2;
+            nextCtx.fillStyle = nextPiece.color;
+            nextCtx.shadowColor = nextPiece.color; nextCtx.shadowBlur = 8;
+            nextPiece.shape.forEach((row, y) => row.forEach((cell, x) => {
+                if (cell) nextCtx.fillRect(ox + x * bs, oy + y * bs, bs - 1, bs - 1);
+            }));
+            nextCtx.shadowBlur = 0;
+        }
+        function drawBoard() {
+            ctx.clearRect(0, 0, 300, 600);
+            ctx.strokeStyle = 'rgba(0,255,255,.1)'; ctx.lineWidth = 1;
+            for (let i = 0; i <= BOARD_WIDTH; i++) { ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, 600); ctx.stroke(); }
+            for (let i = 0; i <= BOARD_HEIGHT; i++) { ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(300, i * CELL_SIZE); ctx.stroke(); }
+            board.forEach((row, y) => row.forEach((cell, x) => {
+                if (cell) {
+                    ctx.fillStyle = cell; ctx.shadowColor = cell; ctx.shadowBlur = 8;
+                    ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+                }
+            }));
+            if (currentPiece) {
+                ctx.fillStyle = currentPiece.color; ctx.shadowColor = currentPiece.color; ctx.shadowBlur = 15;
+                currentPiece.shape.forEach((row, y) => row.forEach((cell, x) => {
+                    if (cell) ctx.fillRect((currentPiece.x + x) * CELL_SIZE, (currentPiece.y + y) * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+                }));
+            }
+            ctx.shadowBlur = 0;
+        }
+        function isValidMove(dx, dy, shape = currentPiece.shape) {
+            const newX = currentPiece.x + dx, newY = currentPiece.y + dy;
+            return shape.every((row, y) => row.every((cell, x) => {
+                if (!cell) return true;
+                const bx = newX + x, by = newY + y;
+                return bx >= 0 && bx < BOARD_WIDTH && by < BOARD_HEIGHT && (by < 0 || !board[by][bx]);
+            }));
+        }
+        function movePiece(dx, dy) {
+            if (isValidMove(dx, dy)) { currentPiece.x += dx; currentPiece.y += dy; return true; }
+            return false;
+        }
+        function rotatePiece() {
+            const N = currentPiece.shape.length, rotated = Array(N).fill().map(() => Array(N).fill(0));
+            for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) rotated[i][j] = currentPiece.shape[N - j - 1][i];
+            if (isValidMove(0, 0, rotated)) {
+                currentPiece.shape = rotated; Sounds.rotate();
+            } else { for (const dx of [-1, 1, -2, 2]) if (isValidMove(dx, 0, rotated)) { currentPiece.x += dx; currentPiece.shape = rotated; Sounds.rotate(); break; } }
+        }
+        function placePiece() {
+            currentPiece.shape.forEach((row, y) => row.forEach((cell, x) => {
+                if (cell) { const by = currentPiece.y + y; if (by >= 0) board[by][currentPiece.x + x] = currentPiece.color; }
+            }));
+            checkLines();
+            generatePiece();
+        }
+        function checkLines() {
+            let cleared = 0;
+            for (let y = BOARD_HEIGHT - 1; y >= 0; y--) if (board[y].every(c => c)) { board.splice(y, 1); board.unshift(Array(BOARD_WIDTH).fill(0)); cleared++; y++; }
+            if (cleared) { Sounds.line(); score += [0, 40, 100, 300, 1200][cleared] * level; lines += cleared; level = Math.floor(lines / 10) + 1; setDropInterval(); updateScore(); }
+        }
+        function hardDrop() { let d = 0; while (movePiece(0, 1)) d++; score += d; Sounds.drop(); updateScore(); placePiece(); }
+        function updateScore() {
+            $('score').textContent = score.toLocaleString();
+            $('level').textContent = level;
+            $('lines').textContent = lines;
+            const p = Math.min(100, ((level - 1) / 19) * 100);
+            $('speed-fill').style.width = p + '%';
+        }
+        function showGameOver() {
+            $('final-score').textContent = score.toLocaleString();
+            $('final-lines').textContent = lines;
+            $('game-over').style.display = 'block';
+        }
+function gameLoop(time) {
+    if (!paused && !gameOver) {
+        if (time - lastDropTime > dropInterval) {
+            if (!movePiece(0, 1)) {
+                placePiece();
+                Sounds.drop();
+            }
+            lastDropTime = time;
+        }
+        drawBoard();
+    }
+    requestAnimationFrame(gameLoop);
+}
+        document.addEventListener('keydown', e => {
+            if (gameOver) return;
+            switch (e.code) {
+                case 'ArrowLeft': movePiece(-1, 0); Sounds.move(); break;
+                case 'ArrowRight': movePiece(1, 0); Sounds.move(); break;
+                case 'ArrowDown': if (movePiece(0, 1)) { score++; updateScore(); } break;
+                case 'ArrowUp': rotatePiece(); break;
+                case 'Space': hardDrop(); e.preventDefault(); break;
+                case 'KeyP': paused = !paused; $('pause-overlay').style.display = paused ? 'flex' : 'none'; break;
+            }
+        });
+        $('restart-button').onclick = init;
+        init();
+        // Kohina stream controls
+/* ----------  Audio + Kohina Radio  ---------- */
+const HTTPS_STREAM = 'https://ia601201.us.archive.org/33/items/kohina_radio_music_collection/%21Cube%20-%20Admirables%20Mod%20Compil%2032%20-%20Atari%20ST.ogg';
+const HTTP_STREAM  = 'https://ia601201.us.archive.org/33/items/kohina_radio_music_collection/%21Cube%20-%20Admirables%20Mod%20Compil%2032%20-%20Atari%20ST.ogg';
+
+let actx, masterGain, muted = false;
+let radio, btn, status, radioPlaying = false;
+
+// small helper to create / resume Web Audio after user gesture
+function initAudio() {
+    if (actx) return;                       // already done
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = actx.createGain();
+    masterGain.connect(actx.destination);
+    masterGain.gain.value = 0.2;
+}
+
+function playTone(freq, type, dur, vol = 1) {
+    if (!actx || muted) return;
+    const osc = actx.createOscillator();
+    const gain = actx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = vol;
+    osc.connect(gain).connect(masterGain);
+    osc.start();
+    osc.stop(actx.currentTime + dur);
+}
+const Sounds = {
+    move  : () => playTone(330, 'square', 0.05, 0.15),
+    rotate: () => playTone(440, 'triangle', 0.08, 0.15),
+    line  : () => playTone(880, 'sine', 0.3, 0.2),
+    drop  : () => playTone(220, 'sawtooth', 0.15, 0.2),
+    gameover: () => [440,415,392,370,349,330,311,294,277,262].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.25,0.25),i*120))
+};
+
+/* Kohina radio UI */
+radio = document.getElementById('radio');
+btn   = document.getElementById('radio-btn');
+status= document.getElementById('radio-status');
+
+['radio-btn','radio-status'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.style.position='absolute';
+  el.style.left='60px';
+  el.style.zIndex='3';
+});
+btn.style.top='10px';
+btn.style.background='rgba(0,0,0,.5)';
+btn.style.border='1px solid #00ffff';
+btn.style.color='#00ffff';
+btn.style.padding='5px 10px';
+btn.style.borderRadius='15px';
+btn.style.fontSize='12px';
+btn.style.cursor='pointer';
+
+function tryPlay(url) {
+    radio.src = url;
+    return radio.play().then(() => {
+        radioPlaying = true;
+        btn.textContent   = '⏸ Pause';
+        status.textContent= '';
+    });
+}
+function toggleRadio() {
+    if (radioPlaying) {
+        radio.pause();
+        radioPlaying = false;
+        btn.textContent = '📻 Play Kohina';
+    } else {
+        status.textContent = 'connecting…';
+        tryPlay(HTTPS_STREAM)
+          .catch(()=>tryPlay(HTTP_STREAM))
+          .catch(()=>{status.textContent='(offline)';});
+    }
+}
+
+/* wait for the first user gesture */
+function onFirstInteraction() {
+    initAudio();                        // unlock Web Audio
+    btn.onclick = toggleRadio;          // enable radio button
+    document.removeEventListener('click', onFirstInteraction);
+    document.removeEventListener('keydown', onFirstInteraction);
+}
+document.addEventListener('click', onFirstInteraction);
+document.addEventListener('keydown', onFirstInteraction);
+
+/* mute button unchanged */
+$('mute-btn').onclick = () => {
+    muted = !muted;
+    $('mute-btn').textContent = muted ? '🔇' : '🔊';
+    if (masterGain) masterGain.gain.value = muted ? 0 : 0.2;
+};
+        setInterval(() => { if (!paused && !gameOver) { if (!movePiece(0, 1)) { placePiece(); Sounds.drop(); } drawBoard(); } }, dropInterval);
+    </script>
+</body>
+</html>
